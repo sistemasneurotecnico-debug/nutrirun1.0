@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import AuthScreen, { getSession, saveSession, clearSession, type AuthUser } from "./AuthScreen";
+import GoalsTab from "./GoalsTab";
 import { 
   Camera, 
   Upload, 
@@ -29,7 +31,9 @@ import {
   Calculator,
   UserCheck,
   ChevronLeft,
-  X
+  X,
+  LogOut,
+  Target
 } from "lucide-react";
 
 interface FoodAnalysisResult {
@@ -252,8 +256,25 @@ const LOADING_STEPS = [
 ];
 
 export default function App() {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getSession());
+
+  const handleLogin = (user: AuthUser) => {
+    saveSession(user);
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    setCurrentUser(null);
+  };
+
+  if (!currentUser) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
+
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<"analizador" | "historial" | "perfil">("analizador");
+  const [activeTab, setActiveTab] = useState<"analizador" | "historial" | "perfil" | "metas">("analizador");
   const [activeSubTab, setActiveSubTab] = useState<"imagen" | "manual">("imagen");
 
   // User profile
@@ -703,11 +724,14 @@ export default function App() {
 
         {/* Dynamic Profile Summary in Header */}
         <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+            <User className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Hola, {currentUser.username}</span>
+          </div>
           <button
             onClick={() => setActiveTab("perfil")}
             className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer text-slate-700"
           >
-            <User className="w-3.5 h-3.5 text-emerald-600" />
             <span>{userProfile.peso_kg} kg ({userProfile.nivel_actividad})</span>
           </button>
 
@@ -724,6 +748,14 @@ export default function App() {
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="text-emerald-700 font-semibold text-[10px] uppercase tracking-wider">AI Live</span>
           </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-semibold text-slate-500 hover:text-rose-600 transition-all cursor-pointer"
+            title="Cerrar sesión"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Salir</span>
+          </button>
         </div>
       </header>
 
@@ -788,6 +820,17 @@ export default function App() {
             >
               <User className="w-3.5 h-3.5 text-emerald-600" />
               <span>Perfil Deportivo</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab("metas"); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "metas"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
+              }`}
+            >
+              <Target className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Metas</span>
             </button>
           </div>
         </div>
@@ -1927,15 +1970,21 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* TAB 4: GOALS & ACHIEVEMENTS */}
+          {activeTab === "metas" && (
+            <GoalsTab history={history} username={currentUser.username} />
+          )}
+
         </AnimatePresence>
 
       </main>
 
-      {/* Footer (Tema Polished) */}
-      <footer className="border-t border-slate-200 bg-white py-8 mt-auto text-center text-xs text-slate-500" id="app-footer">
-        <div className="max-w-6xl mx-auto px-6 space-y-2">
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-white py-6 mt-auto text-center text-xs text-slate-500" id="app-footer">
+        <div className="max-w-6xl mx-auto px-6 space-y-1.5">
           <p className="font-semibold text-slate-700">NutriRun v2.4 — Analizador de Nutrición y Gasto Metabólico • Ciencias del Deporte</p>
-          <p className="text-[10px] text-slate-400 max-w-md mx-auto leading-relaxed">Este informe es una estimación científica aproximada calculada mediante análisis visual y datos matemáticos de reposo. No sustituye de ninguna forma el diagnóstico de un profesional médico o nutricionista.</p>
+          <p className="text-[10px] text-slate-400 max-w-md mx-auto leading-relaxed">Este informe es una estimación científica aproximada. No sustituye el diagnóstico de un profesional médico o nutricionista.</p>
+          <p className="text-[10px] text-slate-300 mt-1">v1.0 · Una aplicación creada para Tatiana 💚</p>
         </div>
       </footer>
     </div>
