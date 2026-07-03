@@ -4,6 +4,45 @@ interface Env {
   GEMINI_API_KEY: string;
 }
 
+// ── Open Food Facts lookup for calorie validation ──────────────────────────
+async function lookupCaloriesOFF(ingredientName: string): Promise<number | null> {
+  try {
+    const query = encodeURIComponent(ingredientName.toLowerCase().trim());
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${query}&search_simple=1&action=process&json=1&page_size=3&fields=product_name,nutriments`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const products = data?.products;
+    if (!Array.isArray(products) || products.length === 0) return null;
+    // Take first result with valid energy-kcal_100g
+    for (const p of products) {
+      const kcal = p?.nutriments?.["energy-kcal_100g"];
+      if (typeof kcal === "number" && kcal > 0 && kcal < 1000) return Math.round(kcal);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Build a reference map from Open Food Facts for the ingredients list
+async function buildCalorieReference(ingredientes: Array<{ nombre: string; peso_g: number }>): Promise<string> {
+  const lookups = await Promise.allSettled(
+    ingredientes.slice(0, 5).map(async (ing) => {
+      const kcalPer100g = await lookupCaloriesOFF(ing.nombre);
+      return kcalPer100g !== null
+        ? `${ing.nombre}: ~${kcalPer100g} kcal/100g (fuente: Open Food Facts) → ~${Math.round(kcalPer100g * ing.peso_g / 100)} kcal para ${ing.peso_g}g`
+        : null;
+    })
+  );
+  const lines = lookups
+    .map(r => (r.status === "fulfilled" ? r.value : null))
+    .filter(Boolean) as string[];
+  return lines.length > 0
+    ? `\n\nDATO VERIFICADO POR BASE DE DATOS NUTRICIONAL:\n${lines.join("\n")}\nUsa estos valores verificados como referencia prioritaria para los ingredientes listados.`
+    : "";
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -97,10 +136,14 @@ Ejemplo 3 — Entrada: plato="Ceviche de camarón", ingredientes=[camarón cocid
 
     const enrichedSystemInstruction = systemInstruction + (contextExtra ? `\n\nCONTEXTO ADICIONAL: ${contextExtra}` : "");
 
+    // Fetch calorie reference from Open Food Facts (best-effort, non-blocking)
+    const calorieRef = await buildCalorieReference(ingredientes);
+
     const textPrompt = `Analiza detalladamente este plato de comida ingresado manualmente:
 Nombre del plato: "${plato}"
 Ingredientes y cantidades:
 ${ingredientes.map((i) => `- ${i.nombre}: ${i.peso_g}g`).join("\n")}
+${calorieRef}
 
 Genera el informe nutricional estricto en formato JSON estimando las calorías, proteínas, carbohidratos, grasas, la distancia para correr y la rutina GymRat personalizada.`;
 

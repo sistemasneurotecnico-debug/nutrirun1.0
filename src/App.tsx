@@ -337,9 +337,21 @@ export default function App() {
   const [identifiedDish, setIdentifiedDish] = useState<string | null>(null);
   const [analysisStep2, setAnalysisStep2] = useState(false);
 
+  // History badge seen state
+  const [historyBadgeSeen, setHistoryBadgeSeen] = useState(false);
+
   // User context for better identification
   const [userCountry, setUserCountry] = useState<string>(() => localStorage.getItem("nutrirun_country") || "");
   const [foodType, setFoodType] = useState<"" | "casera" | "restaurante" | "rapida">("");
+  const [imageDescription, setImageDescription] = useState("");
+
+  // Extra images (up to 2 additional)
+  const [extraImages, setExtraImages] = useState<string[]>([]);
+  const extraFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Adjusted macros state for portion adjustment panel
+  const [adjustedMacros, setAdjustedMacros] = useState<{cal: number; prot: number; carb: number; fat: number} | null>(null);
+  const [showAdjustPanel, setShowAdjustPanel] = useState(false);
 
   // States for manual food assemble
   const [manualPlateName, setManualPlateName] = useState("");
@@ -437,7 +449,9 @@ export default function App() {
         userContext: {
           pais: userCountry || undefined,
           tipoComida: foodType || undefined,
+          descripcion: imageDescription || undefined,
         },
+        extraImages: extraImages.length > 0 ? extraImages : undefined,
       };
 
       if (confirmedDish) body.confirmedDish = confirmedDish;
@@ -481,6 +495,7 @@ export default function App() {
       } else {
         setResults(result);
         setIdentifiedDish(null);
+        setAdjustedMacros(null);
       }
     } catch (err: any) {
       console.error(err);
@@ -548,6 +563,7 @@ export default function App() {
         setResults(data);
       } else {
         setResults(data);
+        setAdjustedMacros(null);
       }
     } catch (err: any) {
       console.error(err);
@@ -614,6 +630,10 @@ export default function App() {
     setIdentifiedDish(null);
     setFeedbackState("idle");
     setFeedbackCorrection("");
+    setImageDescription("");
+    setExtraImages([]);
+    setAdjustedMacros(null);
+    setShowAdjustPanel(false);
   };
 
   // Save meal to history
@@ -643,6 +663,7 @@ export default function App() {
     setHistory(updatedHistory);
     localStorage.setItem("nutrirun_history_v2", JSON.stringify(updatedHistory));
     setSavedInSession([...savedInSession, newEntry.id]);
+    setHistoryBadgeSeen(false);
   };
 
   // Load history entry back into results
@@ -844,7 +865,7 @@ export default function App() {
               <span>Analizar Plato</span>
             </button>
             <button
-              onClick={() => { setActiveTab("historial"); }}
+              onClick={() => { setActiveTab("historial"); setHistoryBadgeSeen(true); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer relative ${
                 activeTab === "historial"
                   ? "bg-white text-slate-900 shadow-sm"
@@ -853,7 +874,7 @@ export default function App() {
             >
               <History className="w-3.5 h-3.5 text-emerald-600" />
               <span>Mi Historial</span>
-              {history.length > 0 && (
+              {history.length > 0 && !historyBadgeSeen && (
                 <span className="absolute -top-1 -right-1 bg-emerald-600 text-white font-extrabold text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white">
                   {history.length}
                 </span>
@@ -989,7 +1010,7 @@ export default function App() {
                         </div>
 
                         {!isAnalyzing && !results && !identifiedDish && (
-                          <div className="space-y-3">
+                            <div className="space-y-3">
                             {/* Context fields */}
                             <div className="grid grid-cols-2 gap-2">
                               <div>
@@ -1013,6 +1034,61 @@ export default function App() {
                                 </select>
                               </div>
                             </div>
+                            {/* Optional image description */}
+                            <div>
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Describe brevemente lo que ves (opcional)</label>
+                              <input
+                                type="text"
+                                value={imageDescription}
+                                onChange={e => setImageDescription(e.target.value)}
+                                placeholder="Ej. arroz con pollo y tajadas de plátano"
+                                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 transition-all"
+                              />
+                            </div>
+                            {/* Extra images */}
+                            {extraImages.length < 2 && (
+                              <div>
+                                <input
+                                  type="file"
+                                  ref={extraFileInputRef}
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = ev => {
+                                      const b64 = (ev.target?.result as string).split(",")[1];
+                                      setExtraImages(prev => [...prev, b64].slice(0, 2));
+                                    };
+                                    reader.readAsDataURL(file);
+                                    e.target.value = "";
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => extraFileInputRef.current?.click()}
+                                  className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-emerald-600 border border-dashed border-slate-300 hover:border-emerald-400 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3" /> Añadir otra foto (opcional)
+                                </button>
+                              </div>
+                            )}
+                            {extraImages.length > 0 && (
+                              <div className="flex gap-2 flex-wrap">
+                                {extraImages.map((img, i) => (
+                                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                                    <img src={`data:image/jpeg;base64,${img}`} alt={`Extra ${i+1}`} className="w-full h-full object-cover" />
+                                    <button
+                                      onClick={() => setExtraImages(prev => prev.filter((_, idx) => idx !== i))}
+                                      className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-0.5 text-rose-500 hover:text-rose-700 cursor-pointer"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <button
                               onClick={() => startAnalysis()}
                               className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/10 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer"
@@ -1325,8 +1401,8 @@ export default function App() {
                             {!error && feedbackState === "idle" && (
                               <div className="flex items-center gap-2 mt-2">
                                 <span className="text-[10px] text-slate-400">¿Identificó bien el plato?</span>
-                                <button onClick={() => { setFeedbackState("sent"); }} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg transition-all">✓ Sí</button>
-                                <button onClick={() => setFeedbackState("editing")} className="text-[10px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg transition-all">✗ No, corregir</button>
+                                <button onClick={() => { setFeedbackState("sent"); }} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg transition-all flex items-center gap-1"><Check className="w-3 h-3" /> Sí</button>
+                                <button onClick={() => setFeedbackState("editing")} className="text-[10px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg transition-all flex items-center gap-1"><X className="w-3 h-3" /> No, corregir</button>
                               </div>
                             )}
                             {feedbackState === "editing" && (
@@ -1428,15 +1504,15 @@ export default function App() {
                               
                               {/* Calories Card */}
                               <div className="md:col-span-5 bg-slate-50 border border-slate-100 rounded-xl p-5 flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-xl shadow-sm flex-shrink-0">
-                                  🔥
+                                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                                  <Flame className="w-6 h-6 text-orange-500" />
                                 </div>
                                 <div>
                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                                     Calorías Totales
                                   </p>
                                   <p className="text-2.5xl font-black text-slate-900 mt-0.5">
-                                    {results.informacion_nutricional.calorias_totales} <span className="text-sm font-semibold text-slate-400">kcal</span>
+                                    {adjustedMacros ? adjustedMacros.cal : results.informacion_nutricional.calorias_totales} <span className="text-sm font-semibold text-slate-400">kcal</span>
                                   </p>
                                 </div>
                               </div>
@@ -1471,18 +1547,94 @@ export default function App() {
                                 <Scale className="w-3.5 h-3.5 text-emerald-600" />
                                 Estimación de Macronutrientes
                               </h4>
+
+                              {/* Adjust portions collapsible panel */}
+                              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                <button
+                                  onClick={() => {
+                                    if (!showAdjustPanel && results && !adjustedMacros) {
+                                      setAdjustedMacros({
+                                        cal: results.informacion_nutricional.calorias_totales,
+                                        prot: results.informacion_nutricional.proteinas_g,
+                                        carb: results.informacion_nutricional.carbohidratos_g,
+                                        fat: results.informacion_nutricional.grasas_g,
+                                      });
+                                    }
+                                    setShowAdjustPanel(p => !p);
+                                  }}
+                                  className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-600 cursor-pointer transition-all"
+                                >
+                                  <span className="flex items-center gap-1.5"><Scale className="w-3.5 h-3.5 text-emerald-600" /> Ajustar porciones</span>
+                                  <ChevronRight className={`w-4 h-4 transition-transform ${showAdjustPanel ? "rotate-90" : ""}`} />
+                                </button>
+                                {showAdjustPanel && adjustedMacros && results && (
+                                  <div className="p-4 space-y-3 border-t border-slate-200 bg-white">
+                                    {([
+                                      { key: "prot" as const, label: "Proteínas (g)", color: "text-blue-600", max: Math.round(results.informacion_nutricional.proteinas_g * 2) || 200 },
+                                      { key: "carb" as const, label: "Carbohidratos (g)", color: "text-amber-600", max: Math.round(results.informacion_nutricional.carbohidratos_g * 2) || 400 },
+                                      { key: "fat" as const, label: "Grasas (g)", color: "text-rose-600", max: Math.round(results.informacion_nutricional.grasas_g * 2) || 160 },
+                                    ]).map(({ key, label, color, max }) => (
+                                      <div key={key} className="space-y-1">
+                                        <div className="flex justify-between text-[11px] font-semibold">
+                                          <span className={color}>{label}</span>
+                                          <input
+                                            type="number"
+                                            value={adjustedMacros[key]}
+                                            min={0}
+                                            onChange={e => {
+                                              const v = Math.max(0, Number(e.target.value));
+                                              setAdjustedMacros(prev => {
+                                                if (!prev) return prev;
+                                                const next = { ...prev, [key]: v };
+                                                next.cal = Math.round(next.prot * 4 + next.carb * 4 + next.fat * 9);
+                                                return next;
+                                              });
+                                            }}
+                                            className="w-16 text-right px-1 py-0.5 text-xs border border-slate-200 rounded outline-none focus:border-emerald-500"
+                                          />
+                                        </div>
+                                        <input
+                                          type="range"
+                                          min={0}
+                                          max={max}
+                                          value={adjustedMacros[key]}
+                                          onChange={e => {
+                                            const v = Number(e.target.value);
+                                            setAdjustedMacros(prev => {
+                                              if (!prev) return prev;
+                                              const next = { ...prev, [key]: v };
+                                              next.cal = Math.round(next.prot * 4 + next.carb * 4 + next.fat * 9);
+                                              return next;
+                                            });
+                                          }}
+                                          className="w-full accent-emerald-600"
+                                        />
+                                      </div>
+                                    ))}
+                                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                                      <span className="text-xs font-bold text-slate-700">Calorías calculadas: <span className="text-orange-600">{adjustedMacros.cal} kcal</span></span>
+                                      <button
+                                        onClick={() => setAdjustedMacros(null)}
+                                        className="text-[10px] font-bold text-slate-400 hover:text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg cursor-pointer transition-all"
+                                      >
+                                        Restablecer
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                               
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" id="macros-bars-container">
                                 {/* Protein */}
                                 <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
                                   <div className="flex justify-between items-end text-xs font-semibold">
                                     <span className="text-slate-500">Proteínas</span>
-                                    <span className="text-slate-950 font-bold">{results.informacion_nutricional.proteinas_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.p}%)</span></span>
+                                    <span className="text-slate-950 font-bold">{adjustedMacros ? adjustedMacros.prot : results.informacion_nutricional.proteinas_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.p}%)</span></span>
                                   </div>
                                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                     <div 
                                       className="h-full bg-blue-500 rounded-full transition-all duration-1000"
-                                      style={{ width: `${Math.min(100, (results.informacion_nutricional.proteinas_g / 100) * 100)}%` }}
+                                      style={{ width: `${Math.min(100, ((adjustedMacros ? adjustedMacros.prot : results.informacion_nutricional.proteinas_g) / 100) * 100)}%` }}
                                     ></div>
                                   </div>
                                 </div>
@@ -1491,12 +1643,12 @@ export default function App() {
                                 <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
                                   <div className="flex justify-between items-end text-xs font-semibold">
                                     <span className="text-slate-500">Carbohidratos</span>
-                                    <span className="text-slate-950 font-bold">{results.informacion_nutricional.carbohidratos_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.c}%)</span></span>
+                                    <span className="text-slate-950 font-bold">{adjustedMacros ? adjustedMacros.carb : results.informacion_nutricional.carbohidratos_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.c}%)</span></span>
                                   </div>
                                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                     <div 
                                       className="h-full bg-amber-500 rounded-full transition-all duration-1000"
-                                      style={{ width: `${Math.min(100, (results.informacion_nutricional.carbohidratos_g / 200) * 100)}%` }}
+                                      style={{ width: `${Math.min(100, ((adjustedMacros ? adjustedMacros.carb : results.informacion_nutricional.carbohidratos_g) / 200) * 100)}%` }}
                                     ></div>
                                   </div>
                                 </div>
@@ -1505,12 +1657,12 @@ export default function App() {
                                 <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
                                   <div className="flex justify-between items-end text-xs font-semibold">
                                     <span className="text-slate-500">Grasas</span>
-                                    <span className="text-slate-950 font-bold">{results.informacion_nutricional.grasas_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.f}%)</span></span>
+                                    <span className="text-slate-950 font-bold">{adjustedMacros ? adjustedMacros.fat : results.informacion_nutricional.grasas_g}g <span className="text-slate-400 text-[10px] font-medium">({macroPercentages.f}%)</span></span>
                                   </div>
                                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                                     <div 
                                       className="h-full bg-rose-500 rounded-full transition-all duration-1000"
-                                      style={{ width: `${Math.min(100, (results.informacion_nutricional.grasas_g / 80) * 100)}%` }}
+                                      style={{ width: `${Math.min(100, ((adjustedMacros ? adjustedMacros.fat : results.informacion_nutricional.grasas_g) / 80) * 100)}%` }}
                                     ></div>
                                   </div>
                                 </div>
@@ -1527,22 +1679,22 @@ export default function App() {
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                                   <div className="bg-white p-2 rounded-lg border border-emerald-100">
                                     <p className="text-[9px] font-bold text-slate-400 uppercase">Calorías</p>
-                                    <p className="text-sm font-extrabold text-slate-800">{Math.round((results.informacion_nutricional.calorias_totales / sportsMetrics.tdee) * 100)}%</p>
+                                    <p className="text-sm font-extrabold text-slate-800">{Math.round(((adjustedMacros ? adjustedMacros.cal : results.informacion_nutricional.calorias_totales) / sportsMetrics.tdee) * 100)}%</p>
                                     <p className="text-[8px] text-slate-400 mt-0.5">de tu TDEE ({sportsMetrics.tdee} kcal)</p>
                                   </div>
                                   <div className="bg-white p-2 rounded-lg border border-emerald-100">
                                     <p className="text-[9px] font-bold text-slate-400 uppercase">Proteína</p>
-                                    <p className="text-sm font-extrabold text-blue-600">{Math.round((results.informacion_nutricional.proteinas_g / sportsMetrics.targetProt) * 100)}%</p>
+                                    <p className="text-sm font-extrabold text-blue-600">{Math.round(((adjustedMacros ? adjustedMacros.prot : results.informacion_nutricional.proteinas_g) / sportsMetrics.targetProt) * 100)}%</p>
                                     <p className="text-[8px] text-slate-400 mt-0.5">de tu meta ({sportsMetrics.targetProt}g)</p>
                                   </div>
                                   <div className="bg-white p-2 rounded-lg border border-emerald-100">
                                     <p className="text-[9px] font-bold text-slate-400 uppercase">Carbos</p>
-                                    <p className="text-sm font-extrabold text-amber-600">{Math.round((results.informacion_nutricional.carbohidratos_g / sportsMetrics.targetCarb) * 100)}%</p>
+                                    <p className="text-sm font-extrabold text-amber-600">{Math.round(((adjustedMacros ? adjustedMacros.carb : results.informacion_nutricional.carbohidratos_g) / sportsMetrics.targetCarb) * 100)}%</p>
                                     <p className="text-[8px] text-slate-400 mt-0.5">de tu meta ({sportsMetrics.targetCarb}g)</p>
                                   </div>
                                   <div className="bg-white p-2 rounded-lg border border-emerald-100">
                                     <p className="text-[9px] font-bold text-slate-400 uppercase">Grasas</p>
-                                    <p className="text-sm font-extrabold text-rose-600">{Math.round((results.informacion_nutricional.grasas_g / sportsMetrics.targetFat) * 100)}%</p>
+                                    <p className="text-sm font-extrabold text-rose-600">{Math.round(((adjustedMacros ? adjustedMacros.fat : results.informacion_nutricional.grasas_g) / sportsMetrics.targetFat) * 100)}%</p>
                                     <p className="text-[8px] text-slate-400 mt-0.5">de tu meta ({sportsMetrics.targetFat}g)</p>
                                   </div>
                                 </div>
@@ -1564,7 +1716,7 @@ export default function App() {
                           }`}
                         >
                           <Activity className="w-4 h-4 text-emerald-600" />
-                          <span className="uppercase tracking-wider">Modo Runner 🏃‍♂️</span>
+                          <span className="uppercase tracking-wider">Modo Runner</span>
                         </button>
                         <button
                           onClick={() => setActivityMode("gymrat")}
@@ -1575,7 +1727,7 @@ export default function App() {
                           }`}
                         >
                           <Dumbbell className="w-4 h-4 text-orange-400" />
-                          <span className="uppercase tracking-wider">Modo GymRat 🏋️‍♂️</span>
+                          <span className="uppercase tracking-wider">Modo GymRat</span>
                         </button>
                       </div>
 
@@ -1592,8 +1744,8 @@ export default function App() {
                           >
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
                               <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center text-2.5xl shadow-sm flex-shrink-0">
-                                  🏃‍♂️
+                                <div className="w-14 h-14 rounded-2xl bg-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                                  <Activity className="w-7 h-7 text-orange-500" />
                                 </div>
                                 <div>
                                   <h3 className="text-base font-bold text-slate-900">Gasto Energético Equivalente</h3>
@@ -1734,8 +1886,9 @@ export default function App() {
                                               {exercise.nombre}
                                             </span>
                                           </div>
-                                          <p className="text-[11px] text-slate-400 leading-normal italic pl-7">
-                                            💡 {exercise.consejo}
+                                          <p className="text-[11px] text-slate-400 leading-normal italic pl-7 flex items-start gap-1">
+                                            <Info className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5" />
+                                            {exercise.consejo}
                                           </p>
                                         </div>
                                         
@@ -1750,7 +1903,7 @@ export default function App() {
                                 {/* Scientific explanation */}
                                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4.5 space-y-2">
                                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
-                                    Justificación Científica Fisiológica 🧪
+                                    Justificación Científica Fisiológica
                                   </span>
                                   <p className="text-xs text-slate-600 leading-relaxed">
                                     {results.rutina_gymrat.explicacion_cientifica}
@@ -1886,7 +2039,7 @@ export default function App() {
                               </div>
                               <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Esfuerzo</p>
-                                <p className="font-extrabold text-orange-600">🏃‍♂️ {item.result.ejercicio.distancia_estimada_km} km</p>
+                                <p className="font-extrabold text-orange-600 flex items-center gap-1"><Activity className="w-3.5 h-3.5 text-orange-500" /> {item.result.ejercicio.distancia_estimada_km} km</p>
                               </div>
                             </div>
 
@@ -2123,7 +2276,7 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-6 space-y-1.5">
           <p className="font-semibold text-slate-700">NutriRun v2.4 — Analizador de Nutrición y Gasto Metabólico • Ciencias del Deporte</p>
           <p className="text-[10px] text-slate-400 max-w-md mx-auto leading-relaxed">Este informe es una estimación científica aproximada. No sustituye el diagnóstico de un profesional médico o nutricionista.</p>
-          <p className="text-[10px] text-slate-300 mt-1">v1.0 · Una aplicación creada para Tatiana 💚</p>
+          <p className="text-[10px] text-slate-300 mt-1">v1.0 · Una aplicación creada para Tatiana</p>
         </div>
       </footer>
     </div>

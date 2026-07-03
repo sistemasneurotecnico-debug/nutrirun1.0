@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Target, Trophy, Plus, Trash2, CheckCircle, Circle,
-  Flame, TrendingUp, Star, Zap, Award, Calendar, X
+  Flame, TrendingUp, Star, Zap, Award, Calendar, X,
+  Utensils, Activity, ClipboardCheck, Calculator
 } from "lucide-react";
 import type { HistoryEntry } from "./types";
 
@@ -22,7 +23,7 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  emoji: string;
+  icon: React.ReactNode;
   unlockedAt: string | null;
   condition: (history: HistoryEntry[], goals: Goal[]) => boolean;
 }
@@ -77,42 +78,42 @@ const ACHIEVEMENT_DEFS: Omit<Achievement, "unlockedAt">[] = [
     id: "first_meal",
     title: "Primera Comida",
     description: "Registraste tu primer plato",
-    emoji: "🍽️",
+    icon: <Utensils className="w-6 h-6 text-orange-500" />,
     condition: (h) => h.length >= 1,
   },
   {
     id: "five_meals",
     title: "Cinco Platos",
     description: "Registraste 5 comidas",
-    emoji: "🥗",
+    icon: <ClipboardCheck className="w-6 h-6 text-emerald-500" />,
     condition: (h) => h.length >= 5,
   },
   {
     id: "ten_meals",
     title: "Veterano Nutricional",
     description: "Registraste 10 comidas",
-    emoji: "🏆",
+    icon: <Trophy className="w-6 h-6 text-amber-500" />,
     condition: (h) => h.length >= 10,
   },
   {
     id: "run_10km",
     title: "10K Runner",
     description: "Acumulaste 10 km de running en tus registros",
-    emoji: "🏃‍♂️",
+    icon: <Activity className="w-6 h-6 text-blue-500" />,
     condition: (h) => h.reduce((acc, e) => acc + (e.result.ejercicio.distancia_estimada_km || 0), 0) >= 10,
   },
   {
     id: "run_50km",
     title: "Ultra Runner",
     description: "Acumulaste 50 km de running en tus registros",
-    emoji: "⚡",
+    icon: <Zap className="w-6 h-6 text-purple-500" />,
     condition: (h) => h.reduce((acc, e) => acc + (e.result.ejercicio.distancia_estimada_km || 0), 0) >= 50,
   },
   {
     id: "daily_3",
     title: "Día Completo",
     description: "Registraste 3 comidas en un mismo día",
-    emoji: "📅",
+    icon: <Calendar className="w-6 h-6 text-indigo-500" />,
     condition: (h) => {
       const byDay: Record<string, number> = {};
       h.forEach(e => { byDay[e.date] = (byDay[e.date] || 0) + 1; });
@@ -123,14 +124,14 @@ const ACHIEVEMENT_DEFS: Omit<Achievement, "unlockedAt">[] = [
     id: "goal_created",
     title: "Planificador",
     description: "Creaste tu primera meta personalizada",
-    emoji: "🎯",
+    icon: <Target className="w-6 h-6 text-emerald-500" />,
     condition: (_, goals) => goals.some(g => g.type === "custom"),
   },
   {
     id: "manual_analyst",
     title: "Chef Analítico",
     description: "Analizaste 3 comidas de forma manual",
-    emoji: "👨‍🍳",
+    icon: <Calculator className="w-6 h-6 text-slate-600" />,
     condition: (h) => h.filter(e => e.isManual).length >= 3,
   },
 ];
@@ -253,12 +254,12 @@ export default function GoalsTab({ history, username }: GoalsTabProps) {
       {/* Summary ring stats — iOS Fitness style */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Platos registrados", value: history.length, unit: "", emoji: "🍽️", color: "bg-orange-50 border-orange-100", textColor: "text-orange-600" },
-          { label: "km acumulados", value: totalKm.toFixed(1), unit: "km", emoji: "🏃‍♂️", color: "bg-emerald-50 border-emerald-100", textColor: "text-emerald-600" },
-          { label: "Logros obtenidos", value: `${unlockedCount}/${achievements.length}`, unit: "", emoji: "🏆", color: "bg-amber-50 border-amber-100", textColor: "text-amber-600" },
+          { label: "Platos registrados", value: history.length, unit: "", icon: <Utensils className="w-5 h-5 text-orange-500" />, color: "bg-orange-50 border-orange-100", textColor: "text-orange-600" },
+          { label: "km acumulados", value: totalKm.toFixed(1), unit: "km", icon: <Activity className="w-5 h-5 text-emerald-600" />, color: "bg-emerald-50 border-emerald-100", textColor: "text-emerald-600" },
+          { label: "Logros obtenidos", value: `${unlockedCount}/${achievements.length}`, unit: "", icon: <Trophy className="w-5 h-5 text-amber-500" />, color: "bg-amber-50 border-amber-100", textColor: "text-amber-600" },
         ].map((stat, i) => (
           <div key={i} className={`${stat.color} border rounded-2xl p-4 flex flex-col items-center text-center`}>
-            <span className="text-2xl mb-1">{stat.emoji}</span>
+            <div className="mb-1">{stat.icon}</div>
             <p className={`text-xl font-black ${stat.textColor}`}>{stat.value}</p>
             <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{stat.label}</p>
           </div>
@@ -403,7 +404,7 @@ export default function GoalsTab({ history, username }: GoalsTabProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {achievements.map(a => (
                   <div key={a.id} className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${a.unlockedAt ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200 opacity-60"}`}>
-                    <span className={`text-2xl ${!a.unlockedAt && "grayscale opacity-40"}`}>{a.emoji}</span>
+                    <div className={`w-8 h-8 flex items-center justify-center flex-shrink-0 ${!a.unlockedAt && "opacity-40 grayscale"}`}>{a.icon}</div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-bold truncate ${a.unlockedAt ? "text-amber-800" : "text-slate-600"}`}>{a.title}</p>
                       <p className="text-[10px] text-slate-400 leading-snug">{a.description}</p>
