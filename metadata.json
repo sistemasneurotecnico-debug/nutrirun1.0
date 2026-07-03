@@ -1,0 +1,6 @@
+{
+  "name": "Analizador Nutricional de Platos",
+  "description": "Analiza platos de comida (vía imagen o ingreso manual) para estimar ingredientes, calorías y macronutrientes, con equivalencias de running personalizadas según tu perfil deportivo e historial de comidas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
