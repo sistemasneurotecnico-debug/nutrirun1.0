@@ -333,6 +333,14 @@ export default function App() {
   const [feedbackState, setFeedbackState] = useState<"idle" | "editing" | "sent">("idle");
   const [feedbackCorrection, setFeedbackCorrection] = useState("");
 
+  // Two-step analysis state
+  const [identifiedDish, setIdentifiedDish] = useState<string | null>(null);
+  const [analysisStep2, setAnalysisStep2] = useState(false);
+
+  // User context for better identification
+  const [userCountry, setUserCountry] = useState<string>(() => localStorage.getItem("nutrirun_country") || "");
+  const [foodType, setFoodType] = useState<"" | "casera" | "restaurante" | "rapida">("");
+
   // States for manual food assemble
   const [manualPlateName, setManualPlateName] = useState("");
   const [manualIngredients, setManualIngredients] = useState<Array<{ id: string; nombre: string; peso_g: number }>>([]);
@@ -394,14 +402,18 @@ export default function App() {
     fileInputRef.current?.click();
   };
 
-  // Image analysis API request
-  const startAnalysis = async () => {
+  // Image analysis API request — two-step flow
+  const startAnalysis = async (confirmedDish?: string) => {
     if (!imagePreview) return;
 
     setIsAnalyzing(true);
     setError(null);
-    setResults(null);
-    setViewingHistoryEntry(null);
+    if (!confirmedDish) {
+      setResults(null);
+      setViewingHistoryEntry(null);
+      setIdentifiedDish(null);
+      setAnalysisStep2(false);
+    }
     setAnalysisStep(0);
     setFeedbackState("idle");
     setFeedbackCorrection("");
@@ -413,19 +425,27 @@ export default function App() {
     }, 1500);
 
     try {
-      const base64Content = imagePreview.split(",")[1];
-      const mimeType = imagePreview.split(",")[0].split(":")[1].split(";")[0];
+      // Only send base64 if it's a real data URL (not an external URL sample)
+      const isDataUrl = imagePreview.startsWith("data:");
+      const base64Content = isDataUrl ? imagePreview.split(",")[1] : imagePreview;
+      const mimeType = isDataUrl ? imagePreview.split(",")[0].split(":")[1].split(";")[0] : "image/jpeg";
+
+      const body: Record<string, unknown> = {
+        image: base64Content,
+        mimeType,
+        profile: userProfile,
+        userContext: {
+          pais: userCountry || undefined,
+          tipoComida: foodType || undefined,
+        },
+      };
+
+      if (confirmedDish) body.confirmedDish = confirmedDish;
 
       const response = await fetch("/api/analyze-food", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          image: base64Content,
-          mimeType: mimeType,
-          profile: userProfile
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -436,13 +456,31 @@ export default function App() {
         return;
       }
 
-      const data: FoodAnalysisResult = await response.json();
+      const data = await response.json();
 
-      if (data.error) {
+      // Step 1 response — dish identified, needs confirmation
+      if (data.step === "identified" && !data.noFood && !data.lowQuality && !confirmedDish) {
+        setIdentifiedDish(data.plato_identificado);
+        setIsAnalyzing(false);
+        if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
+        return;
+      }
+
+      // Low quality or no food
+      if (data.noFood || data.lowQuality) {
         setError(data.error);
-        setResults(data);
+        setResults({ plato_analizado: data.plato_analizado || "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: data.error });
+        return;
+      }
+
+      // Step 2 complete result
+      const { step: _step, ...result } = data;
+      if (result.error) {
+        setError(result.error);
+        setResults(result);
       } else {
-        setResults(data);
+        setResults(result);
+        setIdentifiedDish(null);
       }
     } catch (err: any) {
       console.error(err);
@@ -451,9 +489,7 @@ export default function App() {
       setResults({ plato_analizado: "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: errMsg });
     } finally {
       setIsAnalyzing(false);
-      if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current);
-      }
+      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
     }
   };
 
@@ -489,7 +525,11 @@ export default function App() {
         body: JSON.stringify({
           plato: manualPlateName,
           ingredientes: manualIngredients.map(i => ({ nombre: i.nombre, peso_g: i.peso_g })),
-          profile: userProfile
+          profile: userProfile,
+          userContext: {
+            pais: userCountry || undefined,
+            tipoComida: foodType || undefined,
+          },
         }),
       });
 
@@ -571,6 +611,9 @@ export default function App() {
     setViewingHistoryEntry(null);
     setManualPlateName("");
     setManualIngredients([]);
+    setIdentifiedDish(null);
+    setFeedbackState("idle");
+    setFeedbackCorrection("");
   };
 
   // Save meal to history
@@ -945,15 +988,64 @@ export default function App() {
                           </button>
                         </div>
 
-                        {!isAnalyzing && !results && (
-                          <button
-                            onClick={startAnalysis}
-                            className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/10 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer"
-                            id="btn-analyze"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>Analizar Imagen con IA</span>
-                          </button>
+                        {!isAnalyzing && !results && !identifiedDish && (
+                          <div className="space-y-3">
+                            {/* Context fields */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Tu país (opcional)</label>
+                                <input
+                                  type="text"
+                                  value={userCountry}
+                                  onChange={e => { setUserCountry(e.target.value); localStorage.setItem("nutrirun_country", e.target.value); }}
+                                  placeholder="Ej. Colombia, México..."
+                                  className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 transition-all"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Tipo de comida</label>
+                                <select value={foodType} onChange={e => setFoodType(e.target.value as any)}
+                                  className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 cursor-pointer">
+                                  <option value="">No especificar</option>
+                                  <option value="casera">Comida casera</option>
+                                  <option value="restaurante">Restaurante</option>
+                                  <option value="rapida">Comida rápida</option>
+                                </select>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => startAnalysis()}
+                              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/10 transition-all flex items-center justify-center gap-2 text-xs cursor-pointer"
+                              id="btn-analyze"
+                            >
+                              <Sparkles className="w-4 h-4" />
+                              <span>Analizar Imagen con IA</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Step 1 confirmation panel */}
+                        {!isAnalyzing && identifiedDish && !results && (
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                            <p className="text-xs font-bold text-emerald-800 flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-emerald-600" />
+                              ¿Es este tu plato?
+                            </p>
+                            <p className="text-sm font-black text-slate-900 bg-white px-3 py-2 rounded-lg border border-emerald-200">{identifiedDish}</p>
+                            <div className="flex gap-2">
+                              <button onClick={() => startAnalysis(identifiedDish)}
+                                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                                <Check className="w-3.5 h-3.5" /> Sí, analizar
+                              </button>
+                              <button onClick={() => {
+                                const correction = prompt("¿Cómo se llama realmente este plato?", identifiedDish || "");
+                                if (correction?.trim()) startAnalysis(correction.trim());
+                              }}
+                                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1.5">
+                                <X className="w-3.5 h-3.5" /> No, corregir
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}

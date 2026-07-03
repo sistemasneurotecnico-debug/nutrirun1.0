@@ -8,7 +8,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
   try {
-    const { image, mimeType, profile } = await request.json<{
+    const { image, mimeType, profile, userContext, confirmedDish } = await request.json<{
       image: string;
       mimeType: string;
       profile?: {
@@ -18,31 +18,75 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         nivel_actividad: string;
         genero: string;
       };
+      userContext?: {
+        pais?: string;
+        tipoComida?: string; // "casera" | "restaurante" | "rapida"
+      };
+      confirmedDish?: string; // Nombre confirmado por el usuario en paso 2
     }>();
 
     if (!image || !mimeType) {
-      return Response.json(
-        { error: "Faltan los datos de la imagen o el tipo MIME." },
-        { status: 400 }
-      );
+      return Response.json({ error: "Faltan los datos de la imagen o el tipo MIME." }, { status: 400 });
     }
 
     if (!env.GEMINI_API_KEY) {
-      return Response.json(
-        { error: "La clave GEMINI_API_KEY no está configurada en el servidor." },
-        { status: 500 }
-      );
+      return Response.json({ error: "La clave GEMINI_API_KEY no está configurada en el servidor." }, { status: 500 });
     }
 
     const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
-    const imagePart = {
-      inlineData: {
-        mimeType: mimeType,
-        data: image,
-      },
-    };
+    const imagePart = { inlineData: { mimeType, data: image } };
 
+    // ── PASO 1: Solo identificar el plato (rápido, sin análisis completo) ──
+    // Si no viene confirmedDish, primero identificamos
+    if (!confirmedDish) {
+      const identifyResponse = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          imagePart,
+          {
+            text: `Identifica el plato de comida en esta imagen. 
+${userContext?.pais ? `El usuario es de: ${userContext.pais}.` : ""}
+${userContext?.tipoComida ? `Tipo de comida: ${userContext.tipoComida}.` : ""}
+Responde SOLO con el nombre específico del plato (incluyendo nombre regional si aplica). 
+Si no hay comida, responde exactamente: "NO_FOOD".
+Si la imagen es muy oscura o borrosa para identificar, responde: "LOW_QUALITY".`
+          }
+        ],
+        config: {
+          temperature: 0.1,
+          maxOutputTokens: 80,
+        }
+      });
+
+      const identified = (identifyResponse.text || "").trim();
+
+      if (identified === "NO_FOOD") {
+        return Response.json({
+          step: "identified",
+          noFood: true,
+          plato_analizado: "No identificado",
+          error: "La imagen no parece contener un plato de comida. Por favor sube una foto clara de tu comida.",
+        });
+      }
+
+      if (identified === "LOW_QUALITY") {
+        return Response.json({
+          step: "identified",
+          lowQuality: true,
+          plato_analizado: "Imagen poco clara",
+          error: "La imagen está muy oscura o borrosa. Por favor toma la foto desde arriba con buena iluminación.",
+        });
+      }
+
+      // Devolver identificación para que el usuario confirme
+      return Response.json({
+        step: "identified",
+        plato_identificado: identified,
+      });
+    }
+
+    // ── PASO 2: Análisis completo con el nombre confirmado ──
     let divisor = 75;
     let profileInstruction = "";
     if (profile && profile.peso_kg) {
@@ -56,67 +100,41 @@ El usuario tiene un perfil físico registrado:
 - Altura: ${profile.altura_cm} cm
 - Nivel de Actividad: ${profile.nivel_actividad}
 
-Usa este perfil para ajustar de manera exacta los cálculos. Específicamente, calcula la distancia que necesita correr basándote en que este corredor en particular de ${profile.peso_kg} kg gasta aproximadamente ${divisor} kcal por kilómetro (por lo tanto, divide las calorías totales del plato entre ${divisor} para obtener los 'distancia_estimada_km' que debe correr). En la 'nota_explicativa', incluye detalles personalizados en español haciendo referencia a su edad, peso, altura y nivel de actividad, explicando brevemente cómo influye su perfil en la quema de energía de este plato.`;
+Calcula la distancia que necesita correr basándote en que este corredor de ${profile.peso_kg} kg gasta aproximadamente ${divisor} kcal por kilómetro (divide calorías totales entre ${divisor} para obtener 'distancia_estimada_km'). En 'nota_explicativa', incluye detalles personalizados referenciando su perfil.`;
     }
+
+    const contextExtra = [
+      userContext?.pais ? `País del usuario: ${userContext.pais}.` : "",
+      userContext?.tipoComida ? `Tipo de comida: ${userContext.tipoComida}.` : "",
+    ].filter(Boolean).join(" ");
 
     const systemInstruction = `Actúas como un experto en nutrición y ciencias del deporte con amplio conocimiento de la gastronomía latinoamericana, española y caribeña.
 
-Tu objetivo es analizar la imagen de un plato de comida y generar un informe detallado con estimaciones nutricionales y equivalencia de actividad física.
+El usuario ya confirmó que el plato es: "${confirmedDish}". Usa este nombre exacto en 'plato_analizado'.
+${contextExtra}
 
-═══ CONTEXTO REGIONAL ═══
-Los usuarios son principalmente de Latinoamérica y España. Identifica con precisión platos típicos de estas regiones:
-- América Central y del Sur: arepas, bandeja paisa, pabellón criollo, gallo pinto, casado, lomo saltado, ceviche, arroz con pollo, sopa de res, sancocho, tamales, empanadas, patacones, tostones, yuca frita, chicharrón, mondongo.
-- México: tacos, enchiladas, pozole, chiles rellenos, mole, tlayudas, tortas, quesadillas, tostadas.
-- España y Caribe: paella, cocido madrileño, tortilla española, ropa vieja, arroz con gandules, mofongo.
-- Platos internacionales comunes: pizza, pasta, sushi, hamburguesa, ensalada César.
-Si el plato parece ser de una región específica, nómbralo con su nombre local (ej. "Bandeja Paisa", no solo "plato de carne con frijoles").
+═══ VALORES CALÓRICOS DE REFERENCIA REGIONAL ═══
+Ingredientes comunes: arroz blanco cocido (130 kcal/100g), frijoles negros cocidos (132 kcal/100g), pechuga de pollo a la plancha (165 kcal/100g), carne molida res (250 kcal/100g), plátano maduro frito (250 kcal/100g), yuca cocida (330 kcal/100g), arepa de maíz (220 kcal/100g), chicharrón (544 kcal/100g), aguacate (160 kcal/100g), queso blanco fresco (260 kcal/100g), huevo frito (196 kcal/100g), aceite (884 kcal/100g), papa cocida (87 kcal/100g).
 
-═══ EJEMPLOS DE IDENTIFICACIÓN CORRECTA ═══
-Ejemplo 1:
-- Imagen: arroz blanco + frijoles negros + carne molida + tajadas de plátano maduro
-- Respuesta correcta: plato_analizado = "Pabellón Criollo (Venezuela)" o "Arroz con frijoles negros, carne y plátano maduro"
-- NO escribir solo: "Plato de arroz con carne"
-
-Ejemplo 2:
-- Imagen: masa de maíz rellena asada o frita
-- Respuesta correcta: "Arepa rellena de queso" o "Arepa con pollo y aguacate"
-- NO escribir solo: "Pan de maíz"
-
-Ejemplo 3:
-- Imagen: caldo con verduras, yuca, plátano verde y carne
-- Respuesta correcta: "Sancocho de res" o "Sopa de sancocho con yuca y plátano"
-- NO escribir solo: "Sopa de verduras con carne"
-
-Ejemplo 4:
-- Imagen: plato con arroz, frijoles rojos, huevo frito, plátano maduro, ensalada
-- Respuesta correcta: "Casado costarricense" o "Gallo pinto con huevo y plátano"
-- NO escribir solo: "Plato típico con arroz"
-
-═══ INSTRUCCIONES DE ANÁLISIS ═══
-1. Identificación: Identifica el plato con su nombre específico y regional. Lista los ingredientes principales con peso estimado en gramos.
-2. Estimación Nutricional:
-   - Estima el peso aproximado de cada ingrediente visualmente.
-   - Calcula el total de calorías aproximado del plato.
-   - Proporciona desglose de macronutrientes (proteínas, carbohidratos y grasas en gramos).
-3. Equivalencia de Actividad Física (Modo Runner):
-   - Calcula cuánta distancia (en kilómetros) debe correr el usuario para quemar el total de calorías. Por defecto usa 75 kcal/km si no hay perfil. ${profileInstruction ? "Sigue exactamente las siguientes instrucciones de perfil:" + profileInstruction : "Usa exactamente 75 kcal/km como constante para la división."}
-4. Modo GymRat:
-   - Genera una rutina de ejercicios personalizada según los macronutrientes de la comida y el perfil.
-   - Si proteínas > 25g: enfócate en hipertrofia o fuerza.
-   - Si carbohidratos > 50g: enfócate en gasto de glucógeno o fuerza explosiva/HIIT.
-   - Si grasas o calorías altas: enfócate en acondicionamiento metabólico o quema de grasa.
-   - Incluye variantes 'con_maquinas' y 'sin_maquinas', cada una con 4-5 ejercicios con nombre, series, repeticiones y consejo.
-   - Proporciona 'explicacion_cientifica' detallada en español.
-
-IMPORTANTE: Si la imagen NO contiene comida, rellena 'error' explicando por qué y pon 'No identificado' en 'plato_analizado'.`;
+═══ INSTRUCCIONES ═══
+1. Usa el nombre confirmado. Lista ingredientes con peso visual estimado en gramos.
+2. Calcula calorías y macros usando los valores de referencia cuando apliquen.
+3. Equivalencia runner: ${profileInstruction ? "Usa perfil del usuario:" + profileInstruction : "Usa 75 kcal/km como constante."}
+4. Rutina GymRat personalizada según macros:
+   - Proteínas > 25g → hipertrofia/fuerza
+   - Carbohidratos > 50g → depleción glucógeno/HIIT
+   - Calorías altas/grasas → acondicionamiento metabólico
+   - Variantes con_maquinas y sin_maquinas (4-5 ejercicios cada una con nombre, series, repeticiones, consejo)
+   - explicacion_cientifica detallada en español`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
         imagePart,
-        { text: "Analiza esta imagen y genera el informe nutricional estricto en formato JSON." },
+        { text: `Genera el informe nutricional completo en JSON para: "${confirmedDish}".` },
       ],
       config: {
+        temperature: 0.2,
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
@@ -199,12 +217,11 @@ IMPORTANTE: Si la imagen NO contiene comida, rellena 'error' explicando por qué
     });
 
     const responseText = response.text;
-    if (!responseText) {
-      throw new Error("No se recibió respuesta del modelo Gemini.");
-    }
+    if (!responseText) throw new Error("No se recibió respuesta del modelo Gemini.");
 
     const result = JSON.parse(responseText.trim());
-    return Response.json(result);
+    return Response.json({ step: "complete", ...result });
+
   } catch (error: unknown) {
     console.error("Error al analizar la comida:", error);
     return Response.json(

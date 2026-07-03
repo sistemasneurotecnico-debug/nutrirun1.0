@@ -8,7 +8,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
   try {
-    const { plato, ingredientes, profile } = await request.json<{
+    const { plato, ingredientes, profile, userContext } = await request.json<{
       plato: string;
       ingredientes: Array<{ nombre: string; peso_g: number }>;
       profile?: {
@@ -17,6 +17,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         altura_cm: number;
         nivel_actividad: string;
         genero: string;
+      };
+      userContext?: {
+        pais?: string;
+        tipoComida?: string;
       };
     }>();
 
@@ -86,6 +90,13 @@ Ejemplo 3 — Entrada: plato="Ceviche de camarón", ingredientes=[camarón cocid
    - Variantes 'con_maquinas' y 'sin_maquinas' con 4-5 ejercicios cada una (nombre, series, repeticiones, consejo).
    - 'explicacion_cientifica' detallada en español.`;
 
+    const contextExtra = [
+      userContext?.pais ? `País del usuario: ${userContext.pais}.` : "",
+      userContext?.tipoComida ? `Tipo de comida: ${userContext.tipoComida}.` : "",
+    ].filter(Boolean).join(" ");
+
+    const enrichedSystemInstruction = systemInstruction + (contextExtra ? `\n\nCONTEXTO ADICIONAL: ${contextExtra}` : "");
+
     const textPrompt = `Analiza detalladamente este plato de comida ingresado manualmente:
 Nombre del plato: "${plato}"
 Ingredientes y cantidades:
@@ -97,7 +108,8 @@ Genera el informe nutricional estricto en formato JSON estimando las calorías, 
       model: "gemini-2.5-flash",
       contents: textPrompt,
       config: {
-        systemInstruction,
+        temperature: 0.2,
+        systemInstruction: enrichedSystemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
