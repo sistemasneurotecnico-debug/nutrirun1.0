@@ -266,7 +266,7 @@ export default function App() {
 
   const handleLogout = () => {
     clearSession();
-    setCurrentUser(null);
+    window.location.href = "/";
   };
 
   if (!currentUser) {

@@ -87,7 +87,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       setSuccess("¡Cuenta creada! Iniciando sesión...");
       const user: AuthUser = { username: trimmedUser };
       saveSession(user);
-      setTimeout(() => onLogin(user), 800);
+      setTimeout(() => { window.location.href = "/"; }, 800);
     } else {
       if (!users[trimmedUser]) {
         setError("Usuario no encontrado. ¿Quieres crear una cuenta?");
@@ -99,7 +99,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       }
       const user: AuthUser = { username: trimmedUser };
       saveSession(user);
-      onLogin(user);
+      window.location.href = "/";
     }
   };
 
