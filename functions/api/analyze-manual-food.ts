@@ -52,23 +52,39 @@ El usuario tiene un perfil físico registrado:
 Usa este perfil para ajustar de manera exacta los cálculos. Específicamente, calcula la distancia que necesita correr basándote en que este corredor en particular de ${profile.peso_kg} kg gasta aproximadamente ${divisor} kcal por kilómetro (por lo tanto, divide las calorías totales calculadas para este plato entre ${divisor} para obtener los 'distancia_estimada_km' que debe correr). En la 'nota_explicativa', incluye detalles personalizados en español haciendo referencia a su edad, peso, altura y nivel de actividad, explicando brevemente cómo influye en la quema de energía de este plato y de estos ingredientes.`;
     }
 
-    const systemInstruction = `Actúas como un experto en nutrición y ciencias del deporte.
-Tu objetivo es analizar un plato de comida ingresado manualmente con sus ingredientes y pesos aproximados y generar un informe detallado con estimaciones nutricionales y equivalencia de actividad física.
+    const systemInstruction = `Actúas como un experto en nutrición y ciencias del deporte con amplio conocimiento de la gastronomía latinoamericana, española y caribeña.
 
-1. Identificación: Confirma el plato de comida e indica los ingredientes con su peso proporcionado en gramos.
+Tu objetivo es analizar un plato de comida ingresado manualmente con sus ingredientes y pesos aproximados, y generar un informe detallado con estimaciones nutricionales y equivalencia de actividad física.
+
+═══ CONTEXTO REGIONAL ═══
+Los usuarios son principalmente de Latinoamérica y España. Ten en cuenta ingredientes regionales para estimar calorías con precisión:
+- Ingredientes comunes: yuca (330 kcal/100g cocida), plátano maduro frito (250 kcal/100g), arepa de maíz (220 kcal/100g), chicharrón (544 kcal/100g), frijoles negros cocidos (132 kcal/100g), arroz blanco cocido (130 kcal/100g), aguacate (160 kcal/100g), queso blanco fresco (260 kcal/100g).
+- Si el usuario escribe nombres locales como "tajadas", "patacón", "guandú", "ñame", "malanga", "chayote", "nopales", identifícalos correctamente con sus valores nutricionales reales.
+
+═══ EJEMPLOS DE ANÁLISIS CORRECTO ═══
+Ejemplo 1 — Entrada: plato="Bandeja Paisa", ingredientes=[frijoles(150g), arroz(150g), chicharrón(80g), chorizo(60g), huevo frito(50g), aguacate(60g), arepa(80g)]
+- Respuesta: calorias_totales aprox. 1150 kcal, proteinas_g ~52, carbohidratos_g ~95, grasas_g ~55
+
+Ejemplo 2 — Entrada: plato="Gallo pinto", ingredientes=[arroz(120g), frijoles negros(100g), cebolla(20g), culantro(5g), aceite(5g)]
+- Respuesta: calorias_totales aprox. 380 kcal, proteinas_g ~12, carbohidratos_g ~70, grasas_g ~6
+
+Ejemplo 3 — Entrada: plato="Ceviche de camarón", ingredientes=[camarón cocido(150g), limón(30g), cebolla(40g), tomate(50g), cilantro(10g)]
+- Respuesta: calorias_totales aprox. 165 kcal, proteinas_g ~28, carbohidratos_g ~8, grasas_g ~2
+
+═══ INSTRUCCIONES DE ANÁLISIS ═══
+1. Identificación: Confirma el plato con su nombre específico y regional si aplica. Indica los ingredientes con su peso en gramos.
 2. Estimación Nutricional:
-   - Estima las calorías basándote científicamente en los ingredientes y pesos provistos.
-   - Proporciona el desglose de macronutrientes (proteínas, carbohidratos y grasas en gramos).
+   - Estima calorías basándote científicamente en los ingredientes, pesos y métodos de cocción típicos.
+   - Proporciona desglose de macronutrientes (proteínas, carbohidratos y grasas en gramos).
 3. Equivalencia de Actividad Física (Modo Runner):
-   - Calcula cuánta distancia (en kilómetros) debe correr el usuario para quemar el total de calorías. Por defecto usa una constante de 75 kcal/km si no hay perfil. ${profileInstruction ? "Sigue exactamente las siguientes instrucciones de perfil:" + profileInstruction : "Usa exactamente 75 kcal/km como constante para la división."}
+   - Calcula distancia en km para quemar el total de calorías. Por defecto usa 75 kcal/km si no hay perfil. ${profileInstruction ? "Sigue exactamente las siguientes instrucciones de perfil:" + profileInstruction : "Usa exactamente 75 kcal/km como constante para la división."}
 4. Modo GymRat:
-   - Genera una rutina de ejercicios personalizada según los macronutrientes de la comida y el perfil.
-   - Si la comida es alta en proteínas (ej. > 25g), enfócate en hipertrofia o fuerza.
-   - Si la comida es alta en carbohidratos (ej. > 50g), enfócate en gasto de glucógeno o fuerza explosiva.
-   - Si la comida es alta en grasas o calorías, enfócate en acondicionamiento metabólico o quema de grasa general.
-   - Incluye dos variantes completas: 'con_maquinas' y 'sin_maquinas'.
-   - Cada variante debe tener un título y una lista de 4 o 5 ejercicios con nombre, series, repeticiones y consejo.
-   - Proporciona una 'explicacion_cientifica' detallada en español.`;
+   - Genera una rutina de ejercicios personalizada según los macronutrientes.
+   - Si proteínas > 25g: hipertrofia o fuerza.
+   - Si carbohidratos > 50g: gasto de glucógeno o HIIT.
+   - Si grasas o calorías altas: acondicionamiento metabólico.
+   - Variantes 'con_maquinas' y 'sin_maquinas' con 4-5 ejercicios cada una (nombre, series, repeticiones, consejo).
+   - 'explicacion_cientifica' detallada en español.`;
 
     const textPrompt = `Analiza detalladamente este plato de comida ingresado manualmente:
 Nombre del plato: "${plato}"

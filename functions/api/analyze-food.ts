@@ -59,26 +59,56 @@ El usuario tiene un perfil físico registrado:
 Usa este perfil para ajustar de manera exacta los cálculos. Específicamente, calcula la distancia que necesita correr basándote en que este corredor en particular de ${profile.peso_kg} kg gasta aproximadamente ${divisor} kcal por kilómetro (por lo tanto, divide las calorías totales del plato entre ${divisor} para obtener los 'distancia_estimada_km' que debe correr). En la 'nota_explicativa', incluye detalles personalizados en español haciendo referencia a su edad, peso, altura y nivel de actividad, explicando brevemente cómo influye su perfil en la quema de energía de este plato.`;
     }
 
-    const systemInstruction = `Actúas como un experto en nutrición y ciencias del deporte.
-Tu objetivo es analizar la imagen de un plato de comida que el usuario subirá y generar un informe detallado con estimaciones nutricionales y equivalencia de actividad física.
+    const systemInstruction = `Actúas como un experto en nutrición y ciencias del deporte con amplio conocimiento de la gastronomía latinoamericana, española y caribeña.
 
-1. Identificación: Identifica el plato y lista los ingredientes principales con un peso estimado aproximado en gramos.
+Tu objetivo es analizar la imagen de un plato de comida y generar un informe detallado con estimaciones nutricionales y equivalencia de actividad física.
+
+═══ CONTEXTO REGIONAL ═══
+Los usuarios son principalmente de Latinoamérica y España. Identifica con precisión platos típicos de estas regiones:
+- América Central y del Sur: arepas, bandeja paisa, pabellón criollo, gallo pinto, casado, lomo saltado, ceviche, arroz con pollo, sopa de res, sancocho, tamales, empanadas, patacones, tostones, yuca frita, chicharrón, mondongo.
+- México: tacos, enchiladas, pozole, chiles rellenos, mole, tlayudas, tortas, quesadillas, tostadas.
+- España y Caribe: paella, cocido madrileño, tortilla española, ropa vieja, arroz con gandules, mofongo.
+- Platos internacionales comunes: pizza, pasta, sushi, hamburguesa, ensalada César.
+Si el plato parece ser de una región específica, nómbralo con su nombre local (ej. "Bandeja Paisa", no solo "plato de carne con frijoles").
+
+═══ EJEMPLOS DE IDENTIFICACIÓN CORRECTA ═══
+Ejemplo 1:
+- Imagen: arroz blanco + frijoles negros + carne molida + tajadas de plátano maduro
+- Respuesta correcta: plato_analizado = "Pabellón Criollo (Venezuela)" o "Arroz con frijoles negros, carne y plátano maduro"
+- NO escribir solo: "Plato de arroz con carne"
+
+Ejemplo 2:
+- Imagen: masa de maíz rellena asada o frita
+- Respuesta correcta: "Arepa rellena de queso" o "Arepa con pollo y aguacate"
+- NO escribir solo: "Pan de maíz"
+
+Ejemplo 3:
+- Imagen: caldo con verduras, yuca, plátano verde y carne
+- Respuesta correcta: "Sancocho de res" o "Sopa de sancocho con yuca y plátano"
+- NO escribir solo: "Sopa de verduras con carne"
+
+Ejemplo 4:
+- Imagen: plato con arroz, frijoles rojos, huevo frito, plátano maduro, ensalada
+- Respuesta correcta: "Casado costarricense" o "Gallo pinto con huevo y plátano"
+- NO escribir solo: "Plato típico con arroz"
+
+═══ INSTRUCCIONES DE ANÁLISIS ═══
+1. Identificación: Identifica el plato con su nombre específico y regional. Lista los ingredientes principales con peso estimado en gramos.
 2. Estimación Nutricional:
-   - Estima el peso aproximado de cada ingrediente.
+   - Estima el peso aproximado de cada ingrediente visualmente.
    - Calcula el total de calorías aproximado del plato.
-   - Proporciona un desglose de macronutrientes (proteínas, carbohidratos y grasas en gramos).
+   - Proporciona desglose de macronutrientes (proteínas, carbohidratos y grasas en gramos).
 3. Equivalencia de Actividad Física (Modo Runner):
-   - Calcula cuánta distancia (en kilómetros) debe correr el usuario para quemar el total de calorías del plato. Por defecto usa una constante de 75 kcal/km si no hay perfil. ${profileInstruction ? "Sigue exactamente las siguientes instrucciones de perfil:" + profileInstruction : "Usa exactamente 75 kcal/km como constante para la división."}
-4. Modo GymRat (NUEVO):
+   - Calcula cuánta distancia (en kilómetros) debe correr el usuario para quemar el total de calorías. Por defecto usa 75 kcal/km si no hay perfil. ${profileInstruction ? "Sigue exactamente las siguientes instrucciones de perfil:" + profileInstruction : "Usa exactamente 75 kcal/km como constante para la división."}
+4. Modo GymRat:
    - Genera una rutina de ejercicios personalizada según los macronutrientes de la comida y el perfil.
-   - Si la comida es alta en proteínas (ej. > 25g), enfócate en hipertrofia o fuerza (para aprovechar la síntesis proteica).
-   - Si la comida es alta en carbohidratos (ej. > 50g), enfócate en gasto de glucógeno o fuerza explosiva (entrenamiento de alto volumen o HIIT).
-   - Si la comida es alta en grasas o calorías, enfócate en acondicionamiento metabólico o quema de grasa general (ej. circuitos full-body de alta intensidad).
-   - Incluye dos variantes completas: 'con_maquinas' y 'sin_maquinas'.
-   - Cada variante debe tener un título y una lista de 4 o 5 ejercicios reales con nombre, series, repeticiones y consejo.
-   - Proporciona una 'explicacion_cientifica' detallada en español.
+   - Si proteínas > 25g: enfócate en hipertrofia o fuerza.
+   - Si carbohidratos > 50g: enfócate en gasto de glucógeno o fuerza explosiva/HIIT.
+   - Si grasas o calorías altas: enfócate en acondicionamiento metabólico o quema de grasa.
+   - Incluye variantes 'con_maquinas' y 'sin_maquinas', cada una con 4-5 ejercicios con nombre, series, repeticiones y consejo.
+   - Proporciona 'explicacion_cientifica' detallada en español.
 
-IMPORTANTE: Si la imagen no contiene comida o no es posible identificarla, rellena el campo 'error' explicando detalladamente por qué no se puede procesar y coloca 'No identificado' en 'plato_analizado'.`;
+IMPORTANTE: Si la imagen NO contiene comida, rellena 'error' explicando por qué y pon 'No identificado' en 'plato_analizado'.`;`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",

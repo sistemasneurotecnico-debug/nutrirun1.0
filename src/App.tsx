@@ -329,6 +329,10 @@ export default function App() {
   const [activityMode, setActivityMode] = useState<"runner" | "gymrat">("runner");
   const [gymratSubMode, setGymratSubMode] = useState<"con_maquinas" | "sin_maquinas">("con_maquinas");
 
+  // Feedback state
+  const [feedbackState, setFeedbackState] = useState<"idle" | "editing" | "sent">("idle");
+  const [feedbackCorrection, setFeedbackCorrection] = useState("");
+
   // States for manual food assemble
   const [manualPlateName, setManualPlateName] = useState("");
   const [manualIngredients, setManualIngredients] = useState<Array<{ id: string; nombre: string; peso_g: number }>>([]);
@@ -399,6 +403,8 @@ export default function App() {
     setResults(null);
     setViewingHistoryEntry(null);
     setAnalysisStep(0);
+    setFeedbackState("idle");
+    setFeedbackCorrection("");
 
     let step = 0;
     loadingIntervalRef.current = setInterval(() => {
@@ -1223,6 +1229,47 @@ export default function App() {
                             <h3 className="text-xl font-black text-slate-950 tracking-tight">
                               {results.plato_analizado}
                             </h3>
+                            {/* Feedback inline */}
+                            {!error && feedbackState === "idle" && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] text-slate-400">¿Identificó bien el plato?</span>
+                                <button onClick={() => { setFeedbackState("sent"); }} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg transition-all">✓ Sí</button>
+                                <button onClick={() => setFeedbackState("editing")} className="text-[10px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-lg transition-all">✗ No, corregir</button>
+                              </div>
+                            )}
+                            {feedbackState === "editing" && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <input
+                                  type="text"
+                                  placeholder="¿Cómo se llama realmente este plato?"
+                                  value={feedbackCorrection}
+                                  onChange={e => setFeedbackCorrection(e.target.value)}
+                                  className="text-[11px] px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 flex-1 min-w-0"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => {
+                                    if (feedbackCorrection.trim()) {
+                                      // Save correction to localStorage for future reference
+                                      const key = "nutrirun_feedback_v1";
+                                      const existing = JSON.parse(localStorage.getItem(key) || "[]");
+                                      existing.push({ detected: results.plato_analizado, correction: feedbackCorrection.trim(), date: new Date().toISOString() });
+                                      localStorage.setItem(key, JSON.stringify(existing.slice(-50)));
+                                      setFeedbackState("sent");
+                                    }
+                                  }}
+                                  className="text-[10px] font-bold px-2.5 py-1 bg-emerald-600 text-white rounded-lg cursor-pointer hover:bg-emerald-500 transition-all flex-shrink-0"
+                                >
+                                  Enviar
+                                </button>
+                                <button onClick={() => setFeedbackState("idle")} className="text-slate-400 hover:text-slate-600 cursor-pointer flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
+                              </div>
+                            )}
+                            {feedbackState === "sent" && (
+                              <p className="text-[10px] text-emerald-600 font-semibold mt-2 flex items-center gap-1">
+                                <Check className="w-3 h-3" /> ¡Gracias por el feedback!
+                              </p>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-2">
