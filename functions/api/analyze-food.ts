@@ -108,7 +108,7 @@ Ejemplo 4:
    - Incluye variantes 'con_maquinas' y 'sin_maquinas', cada una con 4-5 ejercicios con nombre, series, repeticiones y consejo.
    - Proporciona 'explicacion_cientifica' detallada en español.
 
-IMPORTANTE: Si la imagen NO contiene comida, rellena 'error' explicando por qué y pon 'No identificado' en 'plato_analizado'.`;`;
+IMPORTANTE: Si la imagen NO contiene comida, rellena 'error' explicando por qué y pon 'No identificado' en 'plato_analizado'.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
