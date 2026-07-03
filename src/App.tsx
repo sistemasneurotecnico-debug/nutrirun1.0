@@ -402,7 +402,11 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo completar el análisis del plato. Intenta nuevamente.");
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData?.error || "No se pudo completar el análisis del plato. Intenta nuevamente.";
+        setError(errMsg);
+        setResults({ plato_analizado: "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: errMsg });
+        return;
       }
 
       const data: FoodAnalysisResult = await response.json();
@@ -415,7 +419,9 @@ export default function App() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Error al conectar con el servidor.");
+      const errMsg = err.message || "Error al conectar con el servidor.";
+      setError(errMsg);
+      setResults({ plato_analizado: "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: errMsg });
     } finally {
       setIsAnalyzing(false);
       if (loadingIntervalRef.current) {
@@ -461,7 +467,11 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo completar el análisis de la comida manual. Intenta nuevamente.");
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData?.error || "No se pudo completar el análisis de la comida manual. Intenta nuevamente.";
+        setError(errMsg);
+        setResults({ plato_analizado: "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: errMsg });
+        return;
       }
 
       const data: FoodAnalysisResult = await response.json();
@@ -474,7 +484,9 @@ export default function App() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Error al conectar con el servidor.");
+      const errMsg = err.message || "Error al conectar con el servidor.";
+      setError(errMsg);
+      setResults({ plato_analizado: "", ingredientes_detectados: [], informacion_nutricional: { calorias_totales: 0, proteinas_g: 0, carbohidratos_g: 0, grasas_g: 0 }, ejercicio: { actividad: "", distancia_estimada_km: 0, nota_explicativa: "" }, rutina_gymrat: { enfoque: "", con_maquinas: { titulo: "", ejercicios: [] }, sin_maquinas: { titulo: "", ejercicios: [] }, explicacion_cientifica: "" }, error: errMsg });
     } finally {
       setIsAnalyzing(false);
       if (loadingIntervalRef.current) {
